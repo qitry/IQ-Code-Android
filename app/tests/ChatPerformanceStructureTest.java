@@ -160,8 +160,8 @@ public final class ChatPerformanceStructureTest {
                 && history.contains("attachToolToCollapsedActivity(tool)")
                 && history.contains("会话记录未包含该工具的结果。"),
             "historical tool sequences must rebuild the same groups and close missing results");
-        require(manifest.contains("versionCode=\"2280\"") && manifest.contains("versionName=\"0.21.18\""),
-            "release version must be 0.21.18");
+        require(manifest.contains("versionCode=\"3000\"") && manifest.contains("versionName=\"0.30.0\""),
+            "release version must be 0.3");
         System.out.println("ChatPerformanceStructureTest PASS");
     }
 }

@@ -1,5 +1,6 @@
 package com.termux.app.iqcode.api;
 
+import com.termux.app.iqcode.api.zcode.ZcodeVault;
 import com.termux.app.iqcode.model.SessionConfig;
 
 import org.json.JSONArray;
@@ -30,6 +31,19 @@ public final class ModelCatalogClient {
     public List<ModelDescriptor> fetch(SessionConfig config, CancellationSignal cancellation) throws Exception {
         if (config == null || config.apiKey == null || config.apiKey.trim().isEmpty()) {
             throw new IllegalStateException("当前 API 配置没有可用密钥");
+        }
+        if ("deepseek-free".equals(config.protocol)) {
+            // 网页端只开放 default 模型（expert/vision 上游已关闭入口，请求会失败），无需拉目录
+            List<ModelDescriptor> fixed = new ArrayList<>();
+            fixed.add(new ModelDescriptor("deepseek-default", "DeepSeek 默认（免费网页版）"));
+            return fixed;
+        }
+        if ("zcode".equals(config.protocol)) {
+            // ZCode start-plan 网关不公开模型目录，直接返回内置的 GLM 套餐目录。
+            List<ModelDescriptor> fixed = new ArrayList<>();
+            String[] pairs = ZcodeVault.modelPairs();
+            for (int i = 0; i < pairs.length; i += 2) fixed.add(new ModelDescriptor(pairs[i], pairs[i + 1]));
+            return fixed;
         }
         String endpoint = ApiEndpointResolver.modelCatalogEndpoint(config);
         if (endpoint.isEmpty()) throw new IllegalStateException("当前 API 协议未公开标准模型目录，请手动填写模型名");

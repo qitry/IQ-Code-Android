@@ -73,15 +73,29 @@ public final class AnthropicMessagesProvider implements ModelProvider {
         }
 
         String endpoint = stripTrailingSlash(baseUrl) + "/v1/messages";
+        Map<String, String> headers = new TreeMap<>();
+        headers.put("content-type", "application/json");
+        headers.put("accept", "text/event-stream");
+        headers.put("x-api-key", config.apiKey);
+        headers.put("anthropic-version", ANTHROPIC_VERSION);
+        headers.put("user-agent", "IQCodeAndroid-JavaNative/0.15");
+        return streamSse(endpoint, headers, body, requests, listener);
+    }
+
+    /**
+     * Shared Anthropic-Messages SSE transport: posts {@code body} to {@code endpoint} with the
+     * caller's headers, decodes the event stream into an {@link AssistantTurn}. Used by this
+     * provider and by the ZCode start-plan provider.
+     */
+    static AssistantTurn streamSse(String endpoint, Map<String, String> headers, JSONObject body,
+                                   HttpRequestTracker requests, StreamListener listener) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(endpoint).openConnection();
         conn.setRequestMethod("POST");
         conn.setDoOutput(true);
         conn.setUseCaches(false);
-        conn.setRequestProperty("content-type", "application/json");
-        conn.setRequestProperty("accept", "text/event-stream");
-        conn.setRequestProperty("x-api-key", config.apiKey);
-        conn.setRequestProperty("anthropic-version", ANTHROPIC_VERSION);
-        conn.setRequestProperty("user-agent", "IQCodeAndroid-JavaNative/0.15");
+        for (Map.Entry<String, String> header : headers.entrySet()) {
+            conn.setRequestProperty(header.getKey(), header.getValue());
+        }
 
         HttpRequestTracker.Scope request = requests.begin(conn);
         AssistantTurn turn = new AssistantTurn();

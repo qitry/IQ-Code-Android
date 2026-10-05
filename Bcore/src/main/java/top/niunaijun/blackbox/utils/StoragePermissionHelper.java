@@ -10,9 +10,6 @@ import android.os.Build;
 import android.os.Environment;
 import android.provider.Settings;
 
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-
 
 public class StoragePermissionHelper {
     
@@ -35,22 +32,22 @@ public class StoragePermissionHelper {
     public static boolean hasStoragePermission(Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             
-            return ContextCompat.checkSelfPermission(context, 
+            return context.checkSelfPermission( 
                     Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED ||
-                   ContextCompat.checkSelfPermission(context, 
+                   context.checkSelfPermission( 
                     Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED ||
-                   ContextCompat.checkSelfPermission(context, 
+                   context.checkSelfPermission( 
                     Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED;
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             
             return Environment.isExternalStorageManager() ||
-                   ContextCompat.checkSelfPermission(context, 
+                   context.checkSelfPermission( 
                     Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         } else {
             
-            return ContextCompat.checkSelfPermission(context, 
+            return context.checkSelfPermission( 
                     Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
-                   ContextCompat.checkSelfPermission(context, 
+                   context.checkSelfPermission( 
                     Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         }
     }
@@ -96,7 +93,7 @@ public class StoragePermissionHelper {
     public static void requestStoragePermission(Activity activity) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             
-            ActivityCompat.requestPermissions(activity,
+            activity.requestPermissions(
                     new String[]{
                             Manifest.permission.READ_MEDIA_IMAGES,
                             Manifest.permission.READ_MEDIA_VIDEO,
@@ -105,7 +102,7 @@ public class StoragePermissionHelper {
                     REQUEST_CODE_STORAGE_PERMISSION);
         } else {
             
-            ActivityCompat.requestPermissions(activity,
+            activity.requestPermissions(
                     new String[]{
                             Manifest.permission.READ_EXTERNAL_STORAGE,
                             Manifest.permission.WRITE_EXTERNAL_STORAGE
@@ -130,10 +127,10 @@ public class StoragePermissionHelper {
     
     public static boolean shouldShowStorageRationale(Activity activity) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return ActivityCompat.shouldShowRequestPermissionRationale(activity, 
+            return activity.shouldShowRequestPermissionRationale( 
                     Manifest.permission.READ_MEDIA_IMAGES);
         } else {
-            return ActivityCompat.shouldShowRequestPermissionRationale(activity, 
+            return activity.shouldShowRequestPermissionRationale( 
                     Manifest.permission.READ_EXTERNAL_STORAGE);
         }
     }

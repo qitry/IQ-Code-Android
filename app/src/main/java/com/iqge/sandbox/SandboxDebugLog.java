@@ -19,9 +19,20 @@ import java.util.Locale;
 public final class SandboxDebugLog {
     private static final String TAG = "IQSandbox";
     private static final int MAX_TEXT = 420_000;
+    /** UI/main-thread work below this duration is normal and stays out of the log. */
+    private static final long STALL_THRESHOLD_MS = 120L;
     private static final Object LOCK = new Object();
     private static volatile File eventFile;
     private SandboxDebugLog() {}
+
+    /**
+     * Records main-thread work that ran long enough to drop frames. Callers time their own
+     * operation and pass the elapsed milliseconds, so silent frames cost nothing.
+     */
+    public static void stall(String label, long elapsedMs) {
+        if (elapsedMs < STALL_THRESHOLD_MS) return;
+        event("卡顿 " + label + " " + elapsedMs + "ms");
+    }
 
     public static void init(Context context) {
         File dir = new File(context.getFilesDir(), "sandbox/debug");

@@ -5,8 +5,10 @@ import android.content.ClipboardManager;
 import android.content.Context;
 
 import com.iqge.sandbox.SandboxTermuxBridge;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -104,12 +106,12 @@ public final class TermuxTerminalPane extends FrameLayout implements TerminalVie
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setPadding(dp(4), 0, dp(4), 0);
         toolbar.setBackgroundColor(BAR);
-        toolbar.addView(action("☰", v -> toggleDrawer()), lp(dp(44), dp(42)));
+        toolbar.addView(action(R.drawable.ic_menu, v -> toggleDrawer()), lp(dp(44), dp(42)));
         title = label("Terminal", 12, TEXT, true);
         title.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.addView(title, new LinearLayout.LayoutParams(0, dp(42), 1));
-        toolbar.addView(action("⌨", v -> toggleKeyboard()), lp(dp(40), dp(36)));
-        toolbar.addView(action("⋮", v -> showQuickActions()), lp(dp(40), dp(36)));
+        toolbar.addView(action(R.drawable.ic_keyboard, v -> toggleKeyboard()), lp(dp(40), dp(36)));
+        toolbar.addView(action(R.drawable.ic_more_vertical, v -> showQuickActions()), lp(dp(40), dp(36)));
         content.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(42)));
 
         terminalHost = new FrameLayout(context);
@@ -154,7 +156,7 @@ public final class TermuxTerminalPane extends FrameLayout implements TerminalVie
         drawerTitle = label("Termux sessions", 14, TEXT, true);
         drawerTitle.setGravity(Gravity.CENTER_VERTICAL);
         drawer.addView(drawerTitle, new LinearLayout.LayoutParams(-1, dp(44)));
-        drawer.addView(drawerAction("＋  New session", v -> { newSession(); closeDrawer(); }), new LinearLayout.LayoutParams(-1, dp(42)));
+        drawer.addView(drawerAction(R.drawable.ic_plus, "New session", v -> { newSession(); closeDrawer(); }), new LinearLayout.LayoutParams(-1, dp(42)));
 
         drawerDivider = new View(context); drawerDivider.setBackgroundColor(DIVIDER);
         LinearLayout.LayoutParams lineLp = new LinearLayout.LayoutParams(-1, 1); lineLp.setMargins(0, dp(7), 0, dp(7));
@@ -166,8 +168,8 @@ public final class TermuxTerminalPane extends FrameLayout implements TerminalVie
         UiMotion.enableLayoutChanges(drawerSessions);
         scroll.addView(drawerSessions, new ScrollView.LayoutParams(-1, -2));
         drawer.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        drawer.addView(drawerAction("⌨  Toggle keyboard", v -> { toggleKeyboard(); closeDrawer(); }), new LinearLayout.LayoutParams(-1, dp(40)));
-        drawer.addView(drawerAction("↻  Reload properties", v -> { reloadProperties(); closeDrawer(); }), new LinearLayout.LayoutParams(-1, dp(40)));
+        drawer.addView(drawerAction(R.drawable.ic_keyboard, "Toggle keyboard", v -> { toggleKeyboard(); closeDrawer(); }), new LinearLayout.LayoutParams(-1, dp(40)));
+        drawer.addView(drawerAction(R.drawable.ic_refresh, "Reload properties", v -> { reloadProperties(); closeDrawer(); }), new LinearLayout.LayoutParams(-1, dp(40)));
 
         nativeLoadError = preloadNativePty();
         reloadProperties();
@@ -183,10 +185,8 @@ public final class TermuxTerminalPane extends FrameLayout implements TerminalVie
             terminalHost.setClipToPadding(target>0);
             terminalHost.setPadding(0,0,0,target);
         }
-        if(animate){
-            extraKeysHost.animate().cancel();
-            extraKeysHost.animate().translationY(-target).setDuration(180L).setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f)).start();
-        }else if(extraKeysHost.getTranslationY()!=-target)extraKeysHost.setTranslationY(-target);
+        if(animate)com.iqge.UiMotion.slideToY(extraKeysHost,-target,180L);
+        else if(extraKeysHost.getTranslationY()!=-target){extraKeysHost.animate().cancel();extraKeysHost.setTranslationY(-target);}
     }
 
     /** Recolors both Termux chrome and live emulator palettes without restarting PTYs or losing scrollback. */
@@ -226,8 +226,13 @@ public final class TermuxTerminalPane extends FrameLayout implements TerminalVie
 
     private void recolorTextTree(View view,int oldText,int oldMuted,int oldAccent,int oldError){
         if(view instanceof TextView){TextView t=(TextView)view;int color=t.getCurrentTextColor();
-            if(color==oldText)t.setTextColor(TEXT);else if(color==oldMuted)t.setTextColor(MUTED);
-            else if(color==oldAccent)t.setTextColor(ACCENT);else if(color==oldError)t.setTextColor(ERROR);
+            int next=color;
+            if(color==oldText)next=TEXT;else if(color==oldMuted)next=MUTED;
+            else if(color==oldAccent)next=ACCENT;else if(color==oldError)next=ERROR;
+            if(next!=color){t.setTextColor(next);
+                Drawable[] icons=t.getCompoundDrawables();
+                for(int i=0;i<icons.length;i++)if(icons[i]!=null)icons[i].setTint(next);
+            }
         }
         if(view instanceof ViewGroup){ViewGroup g=(ViewGroup)view;for(int i=0;i<g.getChildCount();i++)recolorTextTree(g.getChildAt(i),oldText,oldMuted,oldAccent,oldError);}
     }
@@ -358,7 +363,7 @@ public final class TermuxTerminalPane extends FrameLayout implements TerminalVie
         String detail=terminalErrorDetail(error);
         TextView m=label(detail+"\n\nThe app stayed open so you can repair the runtime instead of crashing.",11,MUTED,false);
         m.setTypeface(Typeface.MONOSPACE);m.setTextIsSelectable(true);m.setGravity(Gravity.CENTER);box.addView(m,new LinearLayout.LayoutParams(-1,-2));
-        TextView retry=drawerAction("↻  Retry terminal",v->selectSession(Math.max(0,selected)));retry.setGravity(Gravity.CENTER);
+        TextView retry=drawerAction(R.drawable.ic_refresh, "Retry terminal",v->selectSession(Math.max(0,selected)));retry.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(dp(180),dp(42));rp.setMargins(0,dp(16),0,0);box.addView(retry,rp);
         terminalHost.addView(box,new FrameLayout.LayoutParams(-1,-1));
         UiMotion.bindInteractive(box);
@@ -396,11 +401,11 @@ public final class TermuxTerminalPane extends FrameLayout implements TerminalVie
             String n = s.mSessionName == null ? "session " + (i + 1) : s.mSessionName;
             String sub = s.isRunning() ? "running" : "finished";
             LinearLayout row = new LinearLayout(getContext()); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(dp(8), dp(5), dp(4), dp(5));
+            row.setPadding(dp(8), dp(4), dp(4), dp(4));
             if (i == selected) row.setBackgroundColor(SELECTED_BG);
             TextView text = label((i == selected ? "●  " : "○  ") + n + "\n    " + sub, 12, i == selected ? TEXT : MUTED, i == selected);
             row.addView(text, new LinearLayout.LayoutParams(0, dp(52), 1));
-            TextView close = label("×", 18, MUTED, false); close.setGravity(Gravity.CENTER); close.setOnClickListener(v -> closeSession(idx));
+            TextView close = iconOnly(R.drawable.ic_close,18, MUTED); close.setOnClickListener(v -> closeSession(idx));
             row.addView(close, new LinearLayout.LayoutParams(dp(38), dp(42)));
             row.setOnClickListener(v -> { selectSession(idx); closeDrawer(); });
             row.setOnLongClickListener(v -> { selected = idx; renameSession(); return true; });
@@ -501,7 +506,7 @@ public final class TermuxTerminalPane extends FrameLayout implements TerminalVie
     }
 
     private LinearLayout extraKeyRow() {
-        LinearLayout row = new LinearLayout(getContext()); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(3), dp(2), dp(3), dp(2)); row.setBackgroundColor(BAR); return row;
+        LinearLayout row = new LinearLayout(getContext()); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(2), dp(2), dp(2), dp(2)); row.setBackgroundColor(BAR); return row;
     }
 
     private String displayName(String key) {
@@ -577,6 +582,14 @@ public final class TermuxTerminalPane extends FrameLayout implements TerminalVie
     }
 
     public void requestKeyboard() { if (terminalView != null) terminalView.postDelayed(this::showKeyboard, 80); }
+
+    /** 在当前终端会话里执行一条命令（写入 PTY 输入并回车）；无活动会话时静默忽略。 */
+    public void runCommand(String command) {
+        TerminalSession session = current();
+        if (session == null || !session.isRunning() || command == null || command.isEmpty()) return;
+        byte[] bytes = (command + "\n").getBytes(StandardCharsets.UTF_8);
+        session.write(bytes, 0, bytes.length);
+    }
     private void showKeyboard() { if (terminalView == null) return; terminalView.requestFocus(); InputMethodManager imm = (InputMethodManager)getContext().getSystemService(Context.INPUT_METHOD_SERVICE); if (imm != null) imm.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT); }
     private void toggleKeyboard() { if (terminalView == null) return; terminalView.requestFocus(); InputMethodManager imm = (InputMethodManager)getContext().getSystemService(Context.INPUT_METHOD_SERVICE); if (imm != null) imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT, 0); }
     private void changeFont(int delta) { terminalTextSp = Math.max(8f, Math.min(32f, terminalTextSp + delta)); if (terminalView != null) terminalView.setTextSize(spPx(terminalTextSp)); }
@@ -634,8 +647,22 @@ public final class TermuxTerminalPane extends FrameLayout implements TerminalVie
     @Override public void logStackTraceWithMessage(String tag, String message, Exception e) { Log.e(tag, message, e); }
     @Override public void logStackTrace(String tag, Exception e) { Log.e(tag, "terminal", e); }
 
-    private TextView drawerAction(String s, OnClickListener l) { TextView t = label(s, 12, TEXT, false); t.setGravity(Gravity.CENTER_VERTICAL); t.setPadding(dp(8), 0, dp(8), 0); t.setOnClickListener(l); return t; }
-    private TextView action(String s, OnClickListener l) { TextView t = label(s, 17, TEXT, false); t.setGravity(Gravity.CENTER); t.setOnClickListener(l); return t; }
+    /** Tinted vector icon sized in dp; the terminal chrome draws every glyph this way. */
+    private Drawable vectorIcon(int res, int sizeDp, int color) { Drawable d = getResources().getDrawable(res, getContext().getTheme()); d.setBounds(0, 0, dp(sizeDp), dp(sizeDp)); d.setTint(color); return d; }
+    /** TextView that keeps a lone vector icon centered in its box; TextView.onDraw would pin it to paddingLeft. */
+    private static final class IconTextView extends TextView {
+        IconTextView(Context c) { super(c); }
+        @Override protected void onDraw(Canvas canvas) {
+            Drawable[] ds = getCompoundDrawables();
+            if (ds != null && ds[0] != null && ds[1] == null && ds[2] == null && ds[3] == null && getText().length() == 0) {
+                canvas.translate((getWidth() - getPaddingLeft() - getPaddingRight() - ds[0].getBounds().width()) / 2f, 0);
+            }
+            super.onDraw(canvas);
+        }
+    }
+    private TextView iconOnly(int res, int sizeDp, int color) { TextView t = new IconTextView(getContext()); t.setText(""); t.setTextSize(16); t.setTextColor(color); t.setGravity(Gravity.CENTER); t.setCompoundDrawables(vectorIcon(res, sizeDp, color), null, null, null); return t; }
+    private TextView drawerAction(int res, String s, OnClickListener l) { TextView t = label(s, 12, TEXT, false); t.setGravity(Gravity.CENTER_VERTICAL); t.setPadding(dp(8), 0, dp(8), 0); t.setCompoundDrawablePadding(dp(8)); t.setCompoundDrawables(vectorIcon(res,18, ACCENT), null, null, null); t.setOnClickListener(l); return t; }
+    private TextView action(int res, OnClickListener l) { TextView t = iconOnly(res,22, TEXT); t.setOnClickListener(l); return t; }
     private TextView label(String s, float sp, int color, boolean bold) { TextView t = new TextView(getContext()); t.setText(s); t.setTextSize(sp); t.setTextColor(color); if (bold) t.setTypeface(Typeface.DEFAULT_BOLD); return t; }
     private LinearLayout.LayoutParams lp(int w, int h) { return new LinearLayout.LayoutParams(w, h); }
     private int dp(int v) { return (int)(v * getResources().getDisplayMetrics().density + 0.5f); }

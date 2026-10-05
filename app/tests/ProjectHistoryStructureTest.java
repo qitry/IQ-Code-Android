@@ -16,7 +16,7 @@ public final class ProjectHistoryStructureTest {
         require(store.contains("migrateLegacySessions(File preferred)")&&ui.contains("SessionStore.migrateLegacySessions(lastSession)"),"legacy global sessions must migrate before a runtime opens them");
         require(ui.contains("SessionStore.listSessions(config.projectDirectory)")&&ui.contains("选择项目上下文历史")&&ui.contains("新建空白上下文"),"sidebar and resume picker must show only the active project's contexts");
         require(ui.contains("showProjectPathDialog()")&&ui.contains("switchProjectPath(String requestedProject")&&ui.contains("showProjectHistoryPicker(true)"),"manual project path changes must have a direct entry and open that project's context chooser");
-        require(manifest.contains("versionCode=\"2280\"")&&manifest.contains("versionName=\"0.21.18\""),"release version must be 0.21.18");
+        require(manifest.contains("versionCode=\"3000\"")&&manifest.contains("versionName=\"0.30.0\""),"release version must be 0.3");
         System.out.println("ProjectHistoryStructureTest PASS");
     }
 }

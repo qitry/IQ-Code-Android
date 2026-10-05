@@ -10,8 +10,6 @@ import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 
-import androidx.core.app.NotificationCompat;
-
 import top.niunaijun.blackbox.BlackBoxCore;
 import top.niunaijun.blackbox.utils.compat.BuildCompat;
 
@@ -118,14 +116,19 @@ public class DaemonService extends Service {
     
     private Notification createNotification() {
         try {
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("BlackBox Core")
+            Notification.Builder builder;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                builder = new Notification.Builder(this, CHANNEL_ID);
+            } else {
+                builder = new Notification.Builder(this);
+            }
+            builder.setContentTitle("BlackBox Core")
                 .setContentText("Core services are running")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(Notification.PRIORITY_LOW)
                 .setOngoing(true)
                 .setAutoCancel(false);
-            
+
             return builder.build();
         } catch (Exception e) {
             Log.e(TAG, "Failed to create notification: " + e.getMessage(), e);

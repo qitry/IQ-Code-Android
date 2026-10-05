@@ -27,8 +27,8 @@ public final class InstallPermissionStructureTest {
                 && manifest.contains("android:grantUriPermissions=\"true\"")
                 && manifest.contains("android:exported=\"false\""),
             "private grantable FileProvider must be registered");
-        require(manifest.contains("versionCode=\"2280\"") && manifest.contains("versionName=\"0.21.18\""),
-            "release version must be 0.21.18");
+        require(manifest.contains("versionCode=\"3000\"") && manifest.contains("versionName=\"0.30.0\""),
+            "release version must be 0.3");
         require(provider.contains("ParcelFileDescriptor.MODE_READ_ONLY")
                 && provider.contains("throw new UnsupportedOperationException(\"read-only provider\")")
                 && provider.contains("if (!under(candidate, canonicalRoot))"),

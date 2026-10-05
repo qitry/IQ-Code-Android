@@ -37,15 +37,6 @@ public class JarConfig {
         true
     );
     
-    public static final JarDefinition JUNIT_JAR = new JarDefinition(
-        "junit.jar", 
-        "junit.apk", 
-        1000L, 
-        "JUnit testing framework support", 
-        false
-    );
-    
-    
     public static final int DEFAULT_BUFFER_SIZE = 8192; 
     public static final int MAX_BUFFER_SIZE = 32768; 
     public static final int MIN_BUFFER_SIZE = 1024; 
@@ -66,7 +57,7 @@ public class JarConfig {
     
     
     public static JarDefinition[] getRequiredJars() {
-        return new JarDefinition[]{EMPTY_JAR, JUNIT_JAR};
+        return new JarDefinition[]{EMPTY_JAR};
     }
     
     

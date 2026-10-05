@@ -34,8 +34,7 @@ import android.util.Log;
 import android.util.Xml;
 
 import androidx.annotation.NonNull;
-import androidx.core.util.AtomicFile;
-import androidx.core.util.Preconditions;
+import android.util.AtomicFile;
 
 import org.xmlpull.v1.XmlPullParser;
 
@@ -341,8 +340,8 @@ public class BAccountManagerService extends IBAccountManagerService.Stub impleme
 
     @Override
     public void removeAccountAsUser(IAccountManagerResponse response, Account account, boolean expectActivityLaunch, int userId) throws RemoteException {
-        Preconditions.checkArgument(account != null, "account cannot be null");
-        Preconditions.checkArgument(response != null, "response cannot be null");
+        if (account == null) throw new IllegalArgumentException("account cannot be null");
+        if (response == null) throw new IllegalArgumentException("response cannot be null");
         
         
         BUserAccounts accounts = getUserAccounts(userId);
@@ -514,7 +513,7 @@ public class BAccountManagerService extends IBAccountManagerService.Stub impleme
 
     @Override
     public void getAuthToken(IAccountManagerResponse response, Account account, String authTokenType, boolean notifyOnAuthFailure, boolean expectActivityLaunch, Bundle loginOptions, int userId) throws RemoteException {
-        Preconditions.checkArgument(response != null, "response cannot be null");
+        if (response == null) throw new IllegalArgumentException("response cannot be null");
         try {
             if (account == null) {
                 Slog.w(TAG, "getAuthToken called with null account");
@@ -750,8 +749,8 @@ public class BAccountManagerService extends IBAccountManagerService.Stub impleme
 
     @Override
     public void getAuthTokenLabel(IAccountManagerResponse response, String accountType, String authTokenType, int userId) throws RemoteException {
-        Preconditions.checkArgument(accountType != null, "accountType cannot be null");
-        Preconditions.checkArgument(authTokenType != null, "authTokenType cannot be null");
+        if (accountType == null) throw new IllegalArgumentException("accountType cannot be null");
+        if (authTokenType == null) throw new IllegalArgumentException("authTokenType cannot be null");
 
 
 

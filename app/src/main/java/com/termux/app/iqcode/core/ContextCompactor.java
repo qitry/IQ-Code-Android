@@ -187,11 +187,25 @@ final class ContextCompactor {
     }
 
     static int roughTokens(JSONArray messages, int from, int to) {
+        return roughTokens(messages, from, to, true);
+    }
+
+    /**
+     * Token count for a live message range. Callers that already hold the engine's message lock use
+     * {@code countImages=false} with vision disabled instead of deep-copying the history through
+     * {@link VisionMessageFilter}; image blocks then cost what their replacement text costs.
+     */
+    static int roughTokens(JSONArray messages, int from, int to, boolean countImages) {
         if (messages == null) return 0;
         long tokens = 0;
         int start = Math.max(0, from), end = Math.min(messages.length(), Math.max(start, to));
-        for (int i = start; i < end; i++) tokens += roughMessageTokens(messages.optJSONObject(i));
+        for (int i = start; i < end; i++) tokens += roughMessageTokens(messages.optJSONObject(i), countImages);
         return (int)Math.min(Integer.MAX_VALUE, Math.max(0L, tokens));
+    }
+
+    /** Must mirror the text {@link VisionMessageFilter} substitutes for an image block. */
+    static int imagePlaceholderTokens(JSONObject block) {
+        return roughTextTokens(VisionMessageFilter.placeholderText(block));
     }
 
     private static int[] cumulativeRoughTokens(JSONArray messages) {
@@ -206,6 +220,10 @@ final class ContextCompactor {
     }
 
     private static int roughMessageTokens(JSONObject message) {
+        return roughMessageTokens(message, true);
+    }
+
+    private static int roughMessageTokens(JSONObject message, boolean countImages) {
         if(message==null)return 0;
         long tokens=6;
         JSONArray content=message.optJSONArray("content");
@@ -218,7 +236,7 @@ final class ContextCompactor {
             else if("tool_use".equals(type)){tokens+=roughTextTokens(block.optString("name",""));tokens+=roughJsonTokens(String.valueOf(block.opt("input")));}
             else if("tool_result".equals(type))tokens+=roughJsonTokens(String.valueOf(block.opt("content")));
             else if("function_call".equals(type)){tokens+=roughTextTokens(block.optString("name",""));tokens+=roughJsonTokens(block.optString("arguments",""));}
-            else if("image".equals(type))tokens+=1_200;
+            else if("image".equals(type))tokens+=countImages?1_200:imagePlaceholderTokens(block);
             else tokens+=roughTextTokens(block.toString());
         }
         return (int)Math.min(Integer.MAX_VALUE,tokens);

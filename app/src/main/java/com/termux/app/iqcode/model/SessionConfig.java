@@ -19,10 +19,11 @@ public final class SessionConfig {
     public String effort = "high";
     /** User-authored high-priority instructions, still below code-enforced safety and permissions. */
     public String customSystemPrompt = "";
-    public String roleCard = "";
     public String reasoningSummary = "auto";
     public boolean preserveReasoningState = true;
     public String toolMode = "auto";
+    /** Built-in tools ("plugins") the user switched off. Empty means every tool is enabled. */
+    public final java.util.Set<String> disabledTools = new java.util.LinkedHashSet<>();
     public String sessionId = UUID.randomUUID().toString();
     public String threadId = sessionId;
     /** Stable task namespace for the lifetime of this coding workflow. */
@@ -35,6 +36,8 @@ public final class SessionConfig {
     public boolean sandboxAgentFullAccess = true;
     /** Exposes the opt-in Root tool. Commands still require a real Magisk/KernelSU su grant. */
     public boolean rootExecutionEnabled = false;
+    /** Exposes the opt-in Shizuku tool: shell-identity commands through the Shizuku service, no root needed. */
+    public boolean shizukuExecutionEnabled = false;
     /** Keeps the app in an explicit foreground service until the user turns it off. */
     public boolean forcedKeepAliveEnabled = false;
     public String projectDirectory = TermuxConstants.TERMUX_HOME_DIR_PATH;
@@ -44,6 +47,8 @@ public final class SessionConfig {
     public int maxAgentTurns = 100;
     public boolean streamThinking = true;
     public int contextWindowTokens = 128000;
+    /** 聊天区渲染窗口：只铺最近多少条消息（不影响发给模型的上下文，也不删历史）。 */
+    public int transcriptWindowMessages = 20;
     public boolean autoCompact = true;
     /** Optional user ceiling; the Claude-style output reserve and 13k safety buffer remain authoritative. */
     public double autoCompactRatio = 1.0;
@@ -52,6 +57,15 @@ public final class SessionConfig {
     public int webSearchMaxResults = 6;
     public int webFetchMaxChars = 30000;
     public int webTimeoutMs = 15000;
+
+    /** True only when the user explicitly switched this tool off in the plugin settings. */
+    public boolean isToolDisabled(String name) { return name != null && disabledTools.contains(name); }
+
+    /** Enables or disables one built-in tool; the set stays minimal so the default is "all on". */
+    public void setToolEnabled(String name, boolean enabled) {
+        if (name == null || name.isEmpty()) return;
+        if (enabled) disabledTools.remove(name); else disabledTools.add(name);
+    }
 
     public void renewTransportSession() {
         sessionId = UUID.randomUUID().toString();
@@ -70,10 +84,10 @@ public final class SessionConfig {
         c.visionEnabled = visionEnabled;
         c.effort = effort;
         c.customSystemPrompt = customSystemPrompt;
-        c.roleCard = roleCard;
         c.reasoningSummary = reasoningSummary;
         c.preserveReasoningState = preserveReasoningState;
         c.toolMode = toolMode;
+        c.disabledTools.addAll(disabledTools);
         c.sessionId = sessionId;
         c.threadId = threadId;
         c.workflowId = workflowId;
@@ -83,6 +97,7 @@ public final class SessionConfig {
         c.planWorkflowState = planSnapshot == null ? PlanWorkflowState.idle() : planSnapshot.copy();
         c.sandboxAgentFullAccess = sandboxAgentFullAccess;
         c.rootExecutionEnabled = rootExecutionEnabled;
+        c.shizukuExecutionEnabled = shizukuExecutionEnabled;
         c.forcedKeepAliveEnabled = forcedKeepAliveEnabled;
         c.projectDirectory = projectDirectory;
         c.worktreeOriginalDirectory = worktreeOriginalDirectory;
@@ -91,6 +106,7 @@ public final class SessionConfig {
         c.maxAgentTurns = maxAgentTurns;
         c.streamThinking = streamThinking;
         c.contextWindowTokens = contextWindowTokens;
+        c.transcriptWindowMessages = transcriptWindowMessages;
         c.autoCompact = autoCompact;
         c.autoCompactRatio = autoCompactRatio;
         c.webSearchEnabled = webSearchEnabled;

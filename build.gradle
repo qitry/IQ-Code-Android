@@ -6,8 +6,8 @@ ext {
     compileSdkVersion = 35
     targetSdkVersion = 28
     minSdk = 24
-    versionCode = 2280
-    versionName = "0.21.18"
+    versionCode = 3004
+    versionName = "0.30.4"
     xVersion = '1.1.0'
     hiddenApiBypass = '4.3'
     iqNdkVersion = findProperty("IQ_NDK_VERSION") ?: "29.0.13846066"

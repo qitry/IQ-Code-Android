@@ -33,7 +33,7 @@ public final class RuntimeSteeringStructureTest {
         require(ui.contains("built-in fast /init maintenance command")&&ui.contains("Do not enter plan mode, create tasks"),"/init must use a bounded direct path instead of a slow planning workflow");
         require(bash.contains("isLongRunningBuildCommand")&&bash.contains("15 * 60 * 1000"),"known builds/tests must not die from tiny agent-generated timeouts");
         require(prompt.contains("stable completion state")&&prompt.contains("authoritative queued input"),"system prompt must require completion and respect queued input");
-        require(manifest.contains("versionCode=\"2280\"")&&manifest.contains("versionName=\"0.21.18\""),"release version must be 0.21.18");
+        require(manifest.contains("versionCode=\"3000\"")&&manifest.contains("versionName=\"0.30.0\""),"release version must be 0.3");
         System.out.println("RuntimeSteeringStructureTest PASS");
     }
 }

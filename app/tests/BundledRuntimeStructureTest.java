@@ -42,8 +42,9 @@ public final class BundledRuntimeStructureTest {
         require(Files.size(asset) == EXPECTED_SIZE, "bundled bootstrap size changed unexpectedly");
         require(EXPECTED_SHA256.equals(sha256(asset)), "bundled bootstrap digest changed unexpectedly");
         try (ZipFile zip = new ZipFile(asset.toFile())) {
-            require(zip.size() >= 3000 && zip.getEntry("SYMLINKS.txt") != null,
-                "bundled bootstrap must be a complete Termux archive");
+            require(zip.size() >= 600 && zip.getEntry("SYMLINKS.txt") != null
+                    && zip.getEntry("bin/bash") != null && zip.getEntry("bin/apt") != null,
+                "bundled bootstrap must be a complete Termux archive (docs/dev-only trees pruned)");
         }
 
         require(Files.isRegularFile(compatibilityJar), "binary Termux compatibility library must be present");

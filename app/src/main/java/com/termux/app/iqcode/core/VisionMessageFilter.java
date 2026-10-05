@@ -26,14 +26,19 @@ final class VisionMessageFilter {
                     filtered.put(block);
                     continue;
                 }
-                String name = block.optString("name", "图片").trim();
-                if (name.isEmpty()) name = "图片";
                 filtered.put(new JSONObject()
                     .put("type", "text")
-                    .put("text", "[图片未发送：API 设置中的视觉输入已关闭；文件：" + name + "]"));
+                    .put("text", placeholderText(block)));
             }
             message.put("content", filtered);
         }
         return messages;
+    }
+
+    /** Text an image block is replaced with when images are filtered out of a provider request. */
+    static String placeholderText(JSONObject block) {
+        String name = block == null ? "" : block.optString("name", "图片").trim();
+        if (name.isEmpty()) name = "图片";
+        return "[图片未发送：API 设置中的视觉输入已关闭；文件：" + name + "]";
     }
 }

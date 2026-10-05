@@ -3,7 +3,7 @@ package top.niunaijun.blackbox.core.system.user;
 import android.os.Parcel;
 import android.os.RemoteException;
 
-import androidx.core.util.AtomicFile;
+import android.util.AtomicFile;
 
 import java.io.File;
 import java.io.FileInputStream;

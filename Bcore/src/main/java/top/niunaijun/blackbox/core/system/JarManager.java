@@ -107,11 +107,6 @@ public class JarManager {
     }
     
     
-    public File getJunitJar() {
-        return getJarFile("junit.jar");
-    }
-    
-    
     private void initializeJarEnvironment() {
         Context context = BlackBoxCore.getContext();
         if (context == null) {

@@ -125,6 +125,15 @@ public final class IQCodeEngine {
     private volatile long lastMeasuredContextTokens = -1;
     /** Provider-facing message count represented by {@link #lastMeasuredContextTokens}. */
     private volatile int lastMeasuredMessageCount = -1;
+    /** Bumped under {@link #messageLock} whenever {@link #messages} mutates, so estimates can be reused. */
+    private int historyVersion;
+    private int cachedHistoryVersion = -1;
+    private int cachedHistoryTokens;
+    private int cachedHistoryCount;
+    private boolean cachedHistoryCountImages = true;
+    /** System prompt + tool schema tokens, cached per prompt-relevant config values. */
+    private volatile String cachedPromptKey;
+    private volatile int cachedPromptConfigTokens = -1;
     private volatile int consecutiveAutoCompactFailures;
     private volatile Thread manualCompactionThread;
 
@@ -272,7 +281,7 @@ public final class IQCodeEngine {
     public void resetConversation() {
         cancel();
         clearSteeringQueue();
-        synchronized (messageLock) { while (messages.length() > 0) messages.remove(messages.length() - 1); }
+        synchronized (messageLock) { while (messages.length() > 0) messages.remove(messages.length() - 1); historyVersion++; }
         invalidateMeasuredUsage();
         consecutiveAutoCompactFailures = 0;
         if (config != null) {
@@ -297,11 +306,19 @@ public final class IQCodeEngine {
         synchronized (messageLock) {
             while (messages.length() > 0) messages.remove(messages.length() - 1);
             for (int i = 0; i < restored.length(); i++) messages.put(restored.getJSONObject(i));
+            historyVersion++;
         }
         invalidateMeasuredUsage();
         consecutiveAutoCompactFailures = 0;
         sessionStore = SessionStore.resume(file);
         repairToolHistory("Recovered an incomplete tool call from an earlier interrupted session.", true);
+        // Show the number this session actually ended with. Without it a resumed session falls back
+        // to the fixed prompt/schema estimate, so every stored session looked like the same size.
+        long storedContext = SessionStore.lastContextUsageTokens(file);
+        if (storedContext > 0) {
+            lastMeasuredContextTokens = storedContext;
+            synchronized (messageLock) { lastMeasuredMessageCount = messages.length(); }
+        }
         if (config != null) {
             SessionStore.SessionSummary s = SessionStore.summarize(file);
             if (s.project != null && !s.project.trim().isEmpty() && new File(s.project).isDirectory()) config.projectDirectory = s.project;
@@ -320,34 +337,73 @@ public final class IQCodeEngine {
     }
 
     public int estimateContextTokens() {
-        JSONArray snapshot;
         long measured = lastMeasuredContextTokens;
         int measuredMessages = lastMeasuredMessageCount;
-        try {
-            synchronized (messageLock) { snapshot = new JSONArray(messages.toString()); }
-            SessionConfig current = config;
-            if (current != null && !current.visionEnabled) VisionMessageFilter.apply(snapshot, false);
-        } catch (Exception ignored) {
-            return 0;
+        SessionConfig c = config;
+        // The UI polls this on every chrome refresh. Count the live history in place instead of
+        // deep-copying it through a JSON string, and reuse the walk until the history changes.
+        boolean countImages = c == null || c.visionEnabled;
+        int historyTokens;
+        int historyCount;
+        int suffix = 0;
+        synchronized (messageLock) {
+            if (cachedHistoryVersion != historyVersion || cachedHistoryCountImages != countImages) {
+                cachedHistoryVersion = historyVersion;
+                cachedHistoryCountImages = countImages;
+                cachedHistoryTokens = ContextCompactor.roughTokens(messages, 0, messages.length(), countImages);
+                cachedHistoryCount = messages.length();
+            }
+            historyTokens = cachedHistoryTokens;
+            historyCount = cachedHistoryCount;
+            if (measured >= 0 && measuredMessages >= 0 && measuredMessages < historyCount) {
+                suffix = ContextCompactor.roughTokens(messages, measuredMessages, historyCount, countImages);
+            }
         }
 
         // Claude Code's canonical path uses the last API usage, then estimates only the
         // messages appended since that response. This captures the system prompt and tool
         // schemas that a message-only character count misses.
-        if (measured >= 0 && measuredMessages >= 0 && measuredMessages <= snapshot.length()) {
-            long suffix = ContextCompactor.roughTokens(snapshot, measuredMessages, snapshot.length());
+        if (measured >= 0 && measuredMessages >= 0 && measuredMessages <= historyCount) {
             return (int)Math.min(Integer.MAX_VALUE, Math.max(0L, measured + suffix));
         }
 
-        long estimated = ContextCompactor.roughTokens(snapshot);
-        SessionConfig c = config;
-        if (c != null) {
-            try {
-                estimated += ContextCompactor.roughTextTokens(buildSystemPrompt(c));
-                estimated += Math.max(0, effectiveToolSchemas().toString().length() / 2L);
-            } catch (Exception ignored) { }
-        }
+        long estimated = historyTokens + promptAndSchemaTokens(c);
         return (int)Math.min(Integer.MAX_VALUE, Math.max(0L, estimated));
+    }
+
+    /** Fixed context cost shared by every session: this session's system prompt and tool schemas. */
+    public int fixedContextTokens() { return promptAndSchemaTokens(config); }
+
+    /** Replayed history cost of this session, excluding the fixed prompt/schema overhead. */
+    public int historyContextTokens() {
+        SessionConfig c = config;
+        boolean countImages = c == null || c.visionEnabled;
+        synchronized (messageLock) { return ContextCompactor.roughTokens(messages, 0, messages.length(), countImages); }
+    }
+
+    /** System prompt and tool schema cost, reused while the prompt-relevant inputs are unchanged. */
+    private int promptAndSchemaTokens(SessionConfig c) {
+        if (c == null) return 0;
+        String key = promptCacheKey(c);
+        if (key.equals(cachedPromptKey) && cachedPromptConfigTokens >= 0) return cachedPromptConfigTokens;
+        int tokens = 0;
+        try {
+            tokens += ContextCompactor.roughTextTokens(buildSystemPrompt(c));
+            tokens += (int)Math.max(0, effectiveToolSchemas().toString().length() / 2L);
+        } catch (Exception ignored) { }
+        cachedPromptKey = key;
+        cachedPromptConfigTokens = tokens;
+        return tokens;
+    }
+
+    /**
+     * Everything the system prompt and tool schemas are built from. The config instance is not
+     * stable — the engine mutates it in place (resume, plan state) — so the cache is keyed on
+     * these values instead of on object identity.
+     */
+    private static String promptCacheKey(SessionConfig c) {
+        return c.projectDirectory + "\u0000" + c.customSystemPrompt + "\u0000" + c.disabledTools + "\u0000"
+            + c.rootExecutionEnabled + "\u0000" + c.shizukuExecutionEnabled + "\u0000" + c.webSearchEnabled;
     }
 
     public int contextPercent() {
@@ -432,7 +488,7 @@ public final class IQCodeEngine {
                 if (listener != null) listener.onStatus(turn == 0 ? "Thinking…" : "Continuing after tool results…");
 
                 SessionConfig requestConfig = turnConfig.copy();
-                ModelProvider provider = providerOverride != null ? providerOverride : ModelProviders.forConfig(requestConfig);
+                ModelProvider provider = providerOverride != null ? providerOverride : ModelProviders.forConfig(requestConfig, appContext);
                 repairToolHistory("Recovered an incomplete tool call before an API request.", true);
                 final StringBuilder streamedText = new StringBuilder();
                 ModelProvider.StreamListener streamListener = new ModelProvider.StreamListener() {
@@ -887,7 +943,7 @@ public final class IQCodeEngine {
         summaryConfig.preserveReasoningState = false;
         summaryConfig.renewTransportSession();
 
-        ModelProvider provider = providerOverride != null ? providerOverride : ModelProviders.forConfig(summaryConfig);
+        ModelProvider provider = providerOverride != null ? providerOverride : ModelProviders.forConfig(summaryConfig, appContext);
         ModelProvider.StreamListener silentSummaryListener = new ModelProvider.StreamListener() {
             @Override public void onTextDelta(String text) { }
             @Override public void onThinkingDelta(String thinking) { }
@@ -929,6 +985,7 @@ public final class IQCodeEngine {
             }
             while (messages.length() > 0) messages.remove(messages.length() - 1);
             for (int i = 0; i < compacted.length(); i++) messages.put(compacted.getJSONObject(i));
+            historyVersion++;
         }
 
         invalidateMeasuredUsage();
@@ -1090,6 +1147,7 @@ public final class IQCodeEngine {
                 if (changes > 0) {
                     while (messages.length() > 0) messages.remove(messages.length() - 1);
                     for (int i = 0; i < rebuilt.length(); i++) messages.put(rebuilt.getJSONObject(i));
+                    historyVersion++;
                     invalidateMeasuredUsage();
                     if (persistSnapshot && sessionStore != null) sessionStore.appendContextSnapshot(messages);
                 }
@@ -1130,7 +1188,9 @@ public final class IQCodeEngine {
             if ("EnterPlanMode".equals(call.name)) return enterPlanMode();
             if ("ExitPlanMode".equals(call.name)) return requestPlanApproval(call);
             if (allowedTools != null && !allowedTools.contains(call.name)) return ToolExecutionResult.error("Tool " + call.name + " is not available to this subagent");
+            if (executionConfig != null && executionConfig.isToolDisabled(call.name)) return ToolExecutionResult.error("Tool " + call.name + " is disabled in IQ Code plugin settings");
             if ("Root".equals(call.name) && (executionConfig == null || !executionConfig.rootExecutionEnabled)) return ToolExecutionResult.error("Root tool is disabled in IQ Code settings");
+            if ("Shizuku".equals(call.name) && (executionConfig == null || !executionConfig.shizukuExecutionEnabled)) return ToolExecutionResult.error("Shizuku tool is disabled in IQ Code settings");
             IQTool tool = tools.get(call.name);
             if (tool == null) return ToolExecutionResult.error("Unknown tool: " + call.name);
             String effectivePermissionMode=getEffectivePermissionMode();
@@ -1266,8 +1326,10 @@ public final class IQCodeEngine {
         for (int i=0;i<base.length();i++) {
             JSONObject schema=base.optJSONObject(i); if(schema==null)continue;
             String name=schema.optString("name","");
+            if (config != null && config.isToolDisabled(name)) continue;
             if (("WebSearch".equals(name) || "WebFetch".equals(name)) && config != null && !config.webSearchEnabled) continue;
             if ("Root".equals(name) && (config == null || !config.rootExecutionEnabled)) continue;
+            if ("Shizuku".equals(name) && (config == null || !config.shizukuExecutionEnabled)) continue;
             if (allowedTools == null || allowedTools.contains(name)) out.put(schema);
         }
         if (allowedTools == null || allowedTools.contains("AskUserQuestion")) out.put(askUserQuestionSchema());
@@ -1325,7 +1387,7 @@ public final class IQCodeEngine {
 
     private void appendMessage(String role,JSONArray content,String messageId,String turnId,String origin)throws Exception{
         JSONObject message = new JSONObject().put("role", role).put("content", content);
-        synchronized (messageLock) { messages.put(message); }
+        synchronized (messageLock) { messages.put(message); historyVersion++; }
         SessionStore store = sessionStore; if (store != null) store.appendMessage(role,content,messageId,turnId,origin);
     }
 

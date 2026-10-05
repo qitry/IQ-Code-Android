@@ -33,8 +33,8 @@ public final class ThemeStructureTest {
                 && ui.contains("颜色必须使用 #RRGGBB 格式"),
             "settings must expose validated custom palette controls");
         require(ui.contains("area.addView(buildWorkspaceTabs(true), lp(-1, dp(66)))")
-                && ui.contains("⌂\\n对话") && ui.contains("⇄\\n变更"),
-            "mobile layout must expose chat and changes navigation");
+                && ui.contains("⌂\\n对话") && ui.contains(">_\\n终端") && ui.contains("▣\\n文件"),
+            "mobile layout must expose chat, terminal and file navigation");
         require(ui.contains("Color.rgb(91,103,255)")
                 && ui.contains("Color.rgb(142,78,255)")
                 && ui.contains("Color.rgb(28, 190, 145)")
@@ -66,8 +66,8 @@ public final class ThemeStructureTest {
                 && ui.contains("mixColor")
                 && motion.contains("public static void themeChanged(View view)"),
             "settings must derive and apply a complete runtime palette from custom base colors");
-        require(manifest.contains("versionCode=\"2280\"") && manifest.contains("versionName=\"0.21.18\""),
-            "release version must be 0.21.18");
+        require(manifest.contains("versionCode=\"3000\"") && manifest.contains("versionName=\"0.30.0\""),
+            "release version must be 0.3");
         System.out.println("ThemeStructureTest PASS");
     }
 }

@@ -9,8 +9,10 @@ public final class ApiEndpointResolver {
     private ApiEndpointResolver() { }
 
     public static String modelCatalogEndpoint(SessionConfig config) {
-        String base = stripTrailingSlash(ApiUrlPolicy.requireBaseUrl(config));
         String protocol = config == null || config.protocol == null ? "" : config.protocol;
+        if ("deepseek-free".equals(protocol)) return "";
+        if ("zcode".equals(protocol)) return "";
+        String base = stripTrailingSlash(ApiUrlPolicy.requireBaseUrl(config));
         if ("anthropic".equals(protocol)) return appendV1(base, "models");
         if ("openai-chat".equals(protocol) || "openai-responses".equals(protocol)) return appendV1(base, "models");
         return "";

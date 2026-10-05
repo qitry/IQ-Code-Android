@@ -14,6 +14,22 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class ToolRegistry {
+    /**
+     * Canonical plugin list: every built-in tool the user may switch off individually in
+     * IQ Code settings. Kept in registration order so the settings list is stable.
+     */
+    private static final String[] PLUGIN_NAMES = {
+        "Bash", "Root", "Shizuku", "AndroidIntent", "Sandbox", "Debug", "ui_canvas", "GitStatus",
+        "WebSearch", "WebFetch", "TermuxDoctor", "TermuxRepair", "EnterWorktree", "ExitWorktree",
+        "Read", "ReadMany", "Stat", "Tree", "Write", "Copy", "Edit", "MultiEdit", "Mkdir", "Move",
+        "Delete", "Glob", "Grep", "LS",
+        "TaskCreate", "TaskGet", "TaskList", "TaskUpdate", "Skill", "Sleep",
+        "EnterPlanMode", "ExitPlanMode", "mcp_list", "mcp_call", "TodoWrite",
+    };
+
+    /** Built-in tool names, in the order the plugin settings screen shows them. */
+    public static String[] pluginNames() { return PLUGIN_NAMES.clone(); }
+
     private final Map<String, IQTool> tools = new LinkedHashMap<>();
 
     public ToolRegistry(Context context) {
@@ -21,6 +37,7 @@ public final class ToolRegistry {
         AndroidIntentBridge androidIntent = new AndroidIntentBridge(context);
         register(new BashTool(shell, androidIntent));
         register(new RootBashTool(shell));
+        register(new ShizukuBashTool());
         register(new AndroidIntentTool(androidIntent));
         register(new IQSandboxTool(context));
         register(new IQDebugTool(context, shell));

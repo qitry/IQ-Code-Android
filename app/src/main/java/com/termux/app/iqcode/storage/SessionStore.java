@@ -338,22 +338,42 @@ public final class SessionStore {
         long created = file.lastModified();
         long activity = file.lastModified();
         int count = 0;
-        JSONArray rows = readRows(file);
-        for (int i = 0; i < rows.length(); i++) {
-            JSONObject row = rows.optJSONObject(i);
-            if (row == null) continue;
-            String type = row.optString("type", "");
-            long timestamp = row.optLong("timestamp", 0L);
-            if (!"session_metadata".equals(type) && timestamp > activity) activity = timestamp;
-            if ("session_start".equals(type)) {
-                project = row.optString("project", project);
-                created = row.optLong("created_at", created);
-            } else if ("session_metadata".equals(type)) {
-                JSONObject payload=row.optJSONObject("payload");
-                if(payload!=null){note=sanitizeMetadata(payload.optString("note",""),MAX_NOTE_CHARS);titleOverride=sanitizeMetadata(payload.optString("title_override",""),120).replace('\n',' ');}
-            } else if ("message".equals(type)) {
-                count++;
-                if (title.isEmpty() && "user".equals(row.optString("role"))) title = firstHumanText(row.optJSONArray("content"));
+        // 流式逐行汇总，不再把整个 JSONL 解析进 JSONArray：超长对话里一行就是一条几 MB 的消息，
+        // 整文件解析会直接把堆打爆（侧边栏刷新历史时的历史 OOM 崩溃）。单行超上限时只扫描前缀字段。
+        try (CappedLineReader reader = new CappedLineReader(file)) {
+            String line;
+            while ((line = reader.readLine(MAX_SUMMARY_LINE_CHARS)) != null) {
+                String s = line.trim();
+                if (s.isEmpty()) continue;
+                JSONObject row = null;
+                if (!reader.lastTruncated) {
+                    try { row = new JSONObject(s); } catch (Exception ignored) { }
+                }
+                if (row != null) {
+                    String type = row.optString("type", "");
+                    long timestamp = row.optLong("timestamp", 0L);
+                    if (!"session_metadata".equals(type) && timestamp > activity) activity = timestamp;
+                    if ("session_start".equals(type)) {
+                        project = row.optString("project", project);
+                        created = row.optLong("created_at", created);
+                    } else if ("session_metadata".equals(type)) {
+                        JSONObject payload = row.optJSONObject("payload");
+                        if (payload != null) {
+                            note = sanitizeMetadata(payload.optString("note", ""), MAX_NOTE_CHARS);
+                            titleOverride = sanitizeMetadata(payload.optString("title_override", ""), 120).replace('\n', ' ');
+                        }
+                    } else if ("message".equals(type)) {
+                        count++;
+                        if (title.isEmpty() && "user".equals(row.optString("role"))) title = firstHumanText(row.optJSONArray("content"));
+                    }
+                    continue;
+                }
+                // 被截断（超长）或损坏的行：只从前缀里取 type/role/text，标题取不到就回退文件夹名。
+                String type = scanJsonString(s, "type");
+                if ("message".equals(type)) {
+                    count++;
+                    if (title.isEmpty() && "user".equals(scanJsonString(s, "role"))) title = scanJsonString(s, "text");
+                }
             }
         }
         if(!titleOverride.isEmpty())title=titleOverride;
@@ -362,6 +382,83 @@ public final class SessionStore {
             title = folder == null || folder.isEmpty() ? "Session" : folder;
         }
         return new SessionSummary(file, project, compactTitle(title), note, titleOverride, created, activity, count);
+    }
+
+    /** 汇总类扫描的单行字符上限：超长消息行只保留前缀，内存有界。 */
+    private static final int MAX_SUMMARY_LINE_CHARS = 64 * 1024;
+
+    /**
+     * 有界的逐行读取器：单行最多保留 {@code cap} 个字符，超出部分丢弃但继续消费到行尾。
+     * 汇总/元数据扫描一律走它，避免 BufferedReader.readLine + 整行 JSON 解析在超长会话上 OOM。
+     */
+    private static final class CappedLineReader implements java.io.Closeable {
+        private static final int CHUNK = 8192;
+        private final java.io.Reader in;
+        private final char[] buf = new char[CHUNK];
+        private int pos = 0, len = 0;
+        private boolean eof = false;
+        /** 上一行是否因超过 cap 被截断（调用方据此跳过整行 JSON 解析）。 */
+        boolean lastTruncated = false;
+
+        CappedLineReader(File file) throws Exception {
+            in = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8);
+        }
+
+        String readLine(int cap) throws Exception {
+            lastTruncated = false;
+            StringBuilder out = null;
+            boolean started = false;
+            while (true) {
+                if (pos >= len) {
+                    if (eof) break;
+                    len = in.read(buf);
+                    pos = 0;
+                    if (len < 0) { eof = true; len = 0; break; }
+                }
+                int nl = -1;
+                for (int i = pos; i < len; i++) { if (buf[i] == '\n') { nl = i; break; } }
+                int end = nl >= 0 ? nl : len;
+                started = true;
+                if (end > pos) {
+                    if (out == null) out = new StringBuilder(Math.min(cap, 256));
+                    int room = cap - out.length();
+                    if (room > 0) out.append(buf, pos, Math.min(end - pos, room));
+                    if (end - pos > room) lastTruncated = true;
+                }
+                pos = nl >= 0 ? nl + 1 : len;
+                if (nl >= 0) break;
+            }
+            if (!started) return null;
+            return out == null ? "" : out.toString();
+        }
+
+        @Override public void close() throws java.io.IOException { in.close(); }
+    }
+
+    /** 从（可能被截断的）行前缀里取 "key":"value" 字符串值；不做完整 JSON 解析，找不到返回 ""。 */
+    private static String scanJsonString(String line, String key) {
+        String marker = "\"" + key + "\":\"";
+        int at = line.indexOf(marker);
+        if (at < 0) return "";
+        StringBuilder out = new StringBuilder();
+        for (int i = at + marker.length(); i < line.length() && out.length() < 512; i++) {
+            char c = line.charAt(i);
+            if (c == '\\') {
+                if (i + 1 >= line.length()) break;
+                char esc = line.charAt(++i);
+                if (esc == 'n' || esc == 't' || esc == 'r') out.append(' ');
+                else if (esc == 'u') {
+                    if (i + 4 < line.length()) {
+                        try { out.append((char) Integer.parseInt(line.substring(i + 1, i + 5), 16)); i += 4; }
+                        catch (Exception ignored) { out.append(esc); }
+                    } else break;
+                } else out.append(esc);
+                continue;
+            }
+            if (c == '"') break;
+            out.append(c);
+        }
+        return out.toString();
     }
 
     public static JSONArray readRows(File file) throws Exception {
@@ -403,6 +500,31 @@ public final class SessionStore {
         return normalizeProviderMessages(out);
     }
 
+    /**
+     * Context tokens recorded by the last {@code context_usage} marker of this session, or 0 when
+     * the session never stored one. Resuming can then show the number that session ended with
+     * instead of collapsing every stored session onto the same fixed-overhead estimate.
+     */
+    public static long lastContextUsageTokens(File file) {
+        long tokens = 0L;
+        try (CappedLineReader reader = new CappedLineReader(file)) {
+            String line;
+            while ((line = reader.readLine(MAX_SUMMARY_LINE_CHARS)) != null) {
+                if (reader.lastTruncated) continue;
+                String s = line.trim();
+                if (s.isEmpty()) continue;
+                JSONObject row;
+                try { row = new JSONObject(s); } catch (Exception ignored) { continue; }
+                if (!"context_usage".equals(row.optString("type"))) continue;
+                JSONObject payload = row.optJSONObject("payload");
+                if (payload == null) continue;
+                long value = payload.optLong("context_tokens", -1L);
+                if (value > 0) tokens = value;
+            }
+        } catch (Exception ignored) { }
+        return tokens;
+    }
+
     private static JSONArray normalizeProviderMessages(JSONArray input) throws Exception {
         JSONArray normalized=new JSONArray();
         for(int i=0;i<input.length();i++){
@@ -423,14 +545,19 @@ public final class SessionStore {
     }
 
     public static String loadWorkflowId(File file) {
-        try {
-            JSONArray rows = readRows(file);
-            String workflow = "";
-            for (int i = 0; i < rows.length(); i++) {
-                JSONObject row = rows.optJSONObject(i); if (row == null) continue;
-                if ("session_start".equals(row.optString("type"))) workflow = row.optString("workflow_id", workflow);
+        String workflow = "";
+        try (CappedLineReader reader = new CappedLineReader(file)) {
+            String line;
+            while ((line = reader.readLine(MAX_SUMMARY_LINE_CHARS)) != null) {
+                if (reader.lastTruncated) continue;
+                String s = line.trim();
+                if (s.isEmpty()) continue;
+                JSONObject row;
+                try { row = new JSONObject(s); } catch (Exception ignored) { continue; }
+                String type = row.optString("type", "");
+                if ("session_start".equals(type)) workflow = row.optString("workflow_id", workflow);
                 JSONObject payload = row.optJSONObject("payload");
-                if (payload != null && ("config".equals(row.optString("type")) || row.optString("type").startsWith("plan_")))
+                if (payload != null && ("config".equals(type) || type.startsWith("plan_")))
                     workflow = payload.optString("workflow_id", workflow);
             }
             if (!workflow.trim().isEmpty()) return workflow;
@@ -440,19 +567,22 @@ public final class SessionStore {
     }
 
     public static ProfileBinding loadProfileBinding(File file) {
-        try {
-            JSONArray rows = readRows(file);
-            ProfileBinding binding = null;
-            for (int i = 0; i < rows.length(); i++) {
-                JSONObject row = rows.optJSONObject(i);
-                if (row == null) continue;
+        ProfileBinding binding = null;
+        try (CappedLineReader reader = new CappedLineReader(file)) {
+            String line;
+            while ((line = reader.readLine(MAX_SUMMARY_LINE_CHARS)) != null) {
+                if (reader.lastTruncated) continue;
+                String s = line.trim();
+                if (s.isEmpty()) continue;
+                JSONObject row;
+                try { row = new JSONObject(s); } catch (Exception ignored) { continue; }
                 String type = row.optString("type", "");
                 if (!"profile_binding".equals(type) && !"turn_config".equals(type)) continue;
                 JSONObject payload = row.optJSONObject("payload");
                 if (payload != null && !payload.optString("profile_id", "").isEmpty()) binding = new ProfileBinding(payload);
             }
-            return binding;
-        } catch (Exception ignored) { return null; }
+        } catch (Exception ignored) { }
+        return binding;
     }
 
     /** Stable digest of the exact persisted content array used to validate a UI edit target. */
@@ -612,10 +742,14 @@ public final class SessionStore {
     public static PlanWorkflowState loadPlanState(File file) {
         String workflow = loadWorkflowId(file);
         PlanWorkflowState state = PlanWorkflowState.idle();
-        try {
-            JSONArray rows = readRows(file);
-            for (int i = 0; i < rows.length(); i++) {
-                JSONObject row = rows.optJSONObject(i); if (row == null) continue;
+        try (CappedLineReader reader = new CappedLineReader(file)) {
+            String line;
+            while ((line = reader.readLine(MAX_SUMMARY_LINE_CHARS)) != null) {
+                if (reader.lastTruncated) continue;
+                String s = line.trim();
+                if (s.isEmpty()) continue;
+                JSONObject row;
+                try { row = new JSONObject(s); } catch (Exception ignored) { continue; }
                 String type = row.optString("type", "");
                 if (!type.startsWith("plan_")) continue;
                 JSONObject p = row.optJSONObject("payload"); if (p == null) continue;

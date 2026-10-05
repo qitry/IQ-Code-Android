@@ -10,9 +10,6 @@ import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Log;
 
-import androidx.core.app.NotificationManagerCompat;
-import androidx.core.content.ContextCompat;
-
 import java.lang.reflect.Method;
 
 import top.niunaijun.blackbox.BlackBoxCore;
@@ -60,7 +57,7 @@ public class XiaomiPermissionManager {
         }
         
         Context context = BlackBoxCore.getContext();
-        return ContextCompat.checkSelfPermission(context, POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        return context.checkSelfPermission( POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
     }
     
     
@@ -74,25 +71,25 @@ public class XiaomiPermissionManager {
         
         try {
             
-            if (ContextCompat.checkSelfPermission(context, XIAOMI_AUTOSTART_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
+            if (context.checkSelfPermission( XIAOMI_AUTOSTART_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
                 Slog.d(TAG, "Xiaomi autostart permission not granted");
                 return false;
             }
             
             
-            if (ContextCompat.checkSelfPermission(context, XIAOMI_BATTERY_OPTIMIZATION) != PackageManager.PERMISSION_GRANTED) {
+            if (context.checkSelfPermission( XIAOMI_BATTERY_OPTIMIZATION) != PackageManager.PERMISSION_GRANTED) {
                 Slog.d(TAG, "Xiaomi battery optimization permission not granted");
                 return false;
             }
             
             
-            if (ContextCompat.checkSelfPermission(context, XIAOMI_BACKGROUND_RUNNING) != PackageManager.PERMISSION_GRANTED) {
+            if (context.checkSelfPermission( XIAOMI_BACKGROUND_RUNNING) != PackageManager.PERMISSION_GRANTED) {
                 Slog.d(TAG, "Xiaomi background running permission not granted");
                 return false;
             }
             
             
-            if (ContextCompat.checkSelfPermission(context, XIAOMI_NOTIFICATION_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
+            if (context.checkSelfPermission( XIAOMI_NOTIFICATION_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
                 Slog.d(TAG, "Xiaomi notification permission not granted");
                 return false;
             }

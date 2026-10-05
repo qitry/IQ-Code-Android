@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" package="com.iqge" android:versionCode="2280" android:versionName="0.21.18">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" package="com.iqge" android:versionCode="3004" android:versionName="0.30.4">
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="28" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -32,7 +32,10 @@
     </queries>
     <application
         android:name="com.iqge.IQCodeApplication"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
+        android:largeHeap="true"
         android:usesCleartextTraffic="true"
         android:label="@string/app_name"
         android:requestLegacyExternalStorage="true"
@@ -42,6 +45,7 @@
         <receiver android:name="androidx.profileinstaller.ProfileInstallReceiver" tools:node="remove" />
         <provider android:name="com.iqge.sandbox.SandboxControlProvider" android:authorities="com.iqge.sandbox.control" android:exported="false" android:process=":iqsandbox" />
         <activity android:name="com.iqge.sandbox.SandboxDashboardActivity" android:screenOrientation="unspecified" android:configChanges="keyboard|keyboardHidden|orientation|screenSize" android:windowSoftInputMode="adjustResize" android:exported="false" />
+        <activity android:name="com.iqge.opencode.OpenCodeActivity" android:screenOrientation="unspecified" android:configChanges="keyboard|keyboardHidden|orientation|screenSize" android:windowSoftInputMode="adjustResize" android:exported="false" />
         <activity android:name="com.iqge.MainActivity" android:screenOrientation="unspecified" android:configChanges="keyboard|keyboardHidden|orientation|screenSize" android:windowSoftInputMode="adjustNothing" android:supportsPictureInPicture="true" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -72,5 +76,14 @@
             android:authorities="com.iqge.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true" />
+        <!-- Shizuku（https://github.com/RikkaApps/Shizuku）授权通道：管理端通过它把 shell 身份的
+             Binder 交给本应用。android:permission 只让系统/Shizuku 能调用，普通应用访问不到。 -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 </manifest>
